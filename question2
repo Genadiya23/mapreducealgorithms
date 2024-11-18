@@ -1,0 +1,32 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, countDistinct, desc
+
+# Initialize a SparkSession
+spark = SparkSession.builder.appName("HetIONetAnalysis").getOrCreate()
+
+# File paths
+nodes_path = "/Users/yanasivakova/Downloads/hetionet/nodes.tsv"
+edges_path = "/Users/yanasivakova/Downloads/hetionet/edges.tsv"
+
+# Load edges data
+edges_df = spark.read.option("delimiter", "\t").option("header", True).csv(edges_path)
+
+# Step 1: Filter edges for drug-disease relationships (CtD, CpD)
+drug_disease_df = edges_df.filter(col("metaedge").isin("CtD", "CpD"))
+
+# Step 2: Count how many distinct drugs are associated with each disease
+disease_drug_count_df = drug_disease_df.groupBy("target").agg(countDistinct("source").alias("drug_count"))
+
+# Step 3: Count how many diseases are associated with each distinct drug count
+disease_count_by_drug_count_df = disease_drug_count_df.groupBy("drug_count").count().alias("disease_count")
+
+# Step 4: Sort by the number of diseases (descending) and select the top 5
+top_disease_counts_df = disease_count_by_drug_count_df.orderBy(col("count").desc()).limit(5)
+
+# Collect results to display in custom format
+results = top_disease_counts_df.collect()
+
+# Display the results in the desired format
+print("Q2: Top 5 count of diseases")
+for row in results:
+    print(f"{row['drug_count']} drugs -> {row['count']} diseases")
