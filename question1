@@ -1,0 +1,31 @@
+>>> from pyspark.sql import SparkSession
+... from pyspark.sql.functions import col, countDistinct, desc
+... 
+... # Initialize a SparkSession
+... spark = SparkSession.builder.appName("HetIONetAnalysis").getOrCreate()
+... 
+... # Correct file paths
+... nodes_path = "/Users/yanasivakova/Downloads/hetionet/nodes.tsv"
+... edges_path = "/Users/yanasivakova/Downloads/hetionet/edges.tsv"
+... 
+... # Load nodes and edges data
+... nodes_df = spark.read.option("delimiter", "\t").option("header", True).csv(nodes_path)
+... edges_df = spark.read.option("delimiter", "\t").option("header", True).csv(edges_path)
+... 
+... # Filter edges for drug-gene (CuG, CdG, CbG) and drug-disease (CtD, CpD) associations
+... drug_gene_df = edges_df.filter(col("metaedge").isin("CuG", "CdG", "CbG"))
+... drug_disease_df = edges_df.filter(col("metaedge").isin("CtD", "CpD"))
+... 
+... # Count distinct genes associated with each compound (drug)
+... # "source" represents the drug (compound), and "target" represents the gene
+... drug_gene_count = drug_gene_df.groupBy("source").agg(countDistinct("target").alias("gene_count"))
+... 
+... # Count distinct diseases associated with each compound (drug)
+... # "source" represents the drug (compound), and "target" represents the disease
+... drug_disease_count = drug_disease_df.groupBy("source").agg(countDistinct("target").alias("disease_count"))
+... 
+... # Outer join the counts for each drug
+... drug_counts = drug_gene_count.join(drug_disease_count, on="source", how="outer").fillna(0)
+... 
+... # Sort by gene count and show the top 5 drugs with the highest number of genes
+... drug_counts.orderBy(desc("gene_count")).show(5)
